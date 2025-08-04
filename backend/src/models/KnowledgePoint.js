@@ -53,6 +53,19 @@ class KnowledgePoint {
     return result[0] || null;
   }
 
+  // 根据ID获取知识点
+  static async getById(id) {
+    const sql = `
+      SELECT 
+        id, code, name, category, description, parent_id, sort_order, is_active
+      FROM knowledge_points 
+      WHERE id = ?
+    `;
+    
+    const result = await query(sql, [id]);
+    return result[0] || null;
+  }
+
   // 获取知识点的统计信息
   static async getStatistics() {
     const sql = `
