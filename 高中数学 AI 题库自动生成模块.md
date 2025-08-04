@@ -108,4 +108,17 @@ const check = await kimi.chat.completions.create({
 
 注：kimi key：sk-5WRXcCdiP1HoPDRwpcKnF0Zi5b9th6q12mF50KqBDJrUc62y
 
+
 deepseek key：sk-17269fe512b74407b22f5c926a216bf1
+
+// 数据库配置
+  DB_CONFIG: {
+    host: '8.153.77.15',
+    user: 'connect',
+    password: 'Zhjh0704.',
+    database: 'math',
+    port: 3306,
+    charset: 'utf8mb4',
+    timezone: '+08:00'
+  }
+
