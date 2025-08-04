@@ -26,10 +26,10 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// API限流
-const limiter = rateLimit({
+// API限流配置
+const generalLimiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60000, // 1分钟
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 5, // 每分钟最多5个请求
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 30, // 每分钟最多30个请求
   message: {
     error: 'Too many requests from this IP, please try again later.',
     code: 'RATE_LIMIT_EXCEEDED'
@@ -38,7 +38,21 @@ const limiter = rateLimit({
   legacyHeaders: false
 });
 
-app.use('/api/', limiter);
+// 生成题目API的严格限流
+const generateLimiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60000, // 1分钟
+  max: 3, // 每分钟最多3个生成请求
+  message: {
+    error: 'Too many generate requests, please try again later.',
+    code: 'GENERATE_RATE_LIMIT_EXCEEDED'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// 应用限流中间件
+app.use('/api/', generalLimiter);
+app.use('/api/questions/generate', generateLimiter);
 
 // 请求日志中间件
 app.use((req, res, next) => {

@@ -1,18 +1,50 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
+// 请求缓存机制
+const requestCache = new Map()
+const CACHE_TIME = 30000 // 30秒缓存
+
+// 防抖函数
+const debounce = (func, delay) => {
+  let timeoutId
+  return (...args) => {
+    clearTimeout(timeoutId)
+    timeoutId = setTimeout(() => func.apply(null, args), delay)
+  }
+}
+
 // 创建axios实例
 const request = axios.create({
-  baseURL: process.env.VUE_APP_API_BASE_URL || 'http://localhost:3000/api',
+  baseURL: process.env.NODE_ENV === 'development' ? '/api' : (process.env.VUE_APP_API_BASE_URL || 'http://localhost:3000/api'),
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
   }
 })
 
+// 生成缓存键
+const getCacheKey = (config) => {
+  return `${config.method}_${config.url}_${JSON.stringify(config.params || {})}`
+}
+
 // 请求拦截器
 request.interceptors.request.use(
   config => {
+    // 检查缓存（仅对GET请求）
+    if (config.method === 'get') {
+      const cacheKey = getCacheKey(config)
+      const cached = requestCache.get(cacheKey)
+      
+      if (cached && Date.now() - cached.timestamp < CACHE_TIME) {
+        // 返回缓存的Promise
+        return Promise.reject({
+          isCache: true,
+          data: cached.data
+        })
+      }
+    }
+    
     // 在此处可以添加认证token等
     // if (token) {
     //   config.headers.Authorization = `Bearer ${token}`
@@ -28,7 +60,16 @@ request.interceptors.request.use(
 // 响应拦截器
 request.interceptors.response.use(
   response => {
-    const { data } = response
+    const { data, config } = response
+    
+    // 缓存GET请求的响应
+    if (config.method === 'get') {
+      const cacheKey = getCacheKey(config)
+      requestCache.set(cacheKey, {
+        data,
+        timestamp: Date.now()
+      })
+    }
     
     // 如果响应包含success字段且为false，视为业务错误
     if (data.success === false) {
@@ -39,9 +80,15 @@ request.interceptors.response.use(
     return data
   },
   error => {
+    // 处理缓存情况
+    if (error.isCache) {
+      return Promise.resolve(error.data)
+    }
+    
     console.error('响应错误:', error)
     
     let message = '网络错误'
+    let showMessage = true
     
     if (error.response) {
       const { status, data } = error.response
@@ -61,6 +108,8 @@ request.interceptors.response.use(
           break
         case 429:
           message = '请求过于频繁，请稍后再试'
+          // 对于429错误，我们可能不需要每次都显示错误消息
+          showMessage = !error.config.__isRetryRequest
           break
         case 500:
           message = '服务器内部错误'
@@ -69,12 +118,14 @@ request.interceptors.response.use(
           message = data.message || `服务器错误 (${status})`
       }
     } else if (error.request) {
-      message = '网络连接失败，请检查网络'
+      message = '网络连接失败，请检查后端服务是否启动'
     } else {
       message = error.message || '未知错误'
     }
     
-    ElMessage.error(message)
+    if (showMessage) {
+      ElMessage.error(message)
+    }
     return Promise.reject(error)
   }
 )

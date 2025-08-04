@@ -229,17 +229,31 @@ export default {
     const loadDashboardData = async () => {
       loading.value = true
       try {
-        // 加载统计数据
-        await store.dispatch('statistics/getSystemStatistics')
+        // 延迟加载，避免频繁请求
+        await new Promise(resolve => setTimeout(resolve, 100))
         
-        // 加载最新题目
-        const response = await store.dispatch('question/getRawQuestions', {
-          page: 1,
-          size: 10
-        })
-        recentQuestions.value = response.data.questions || []
+        // 加载统计数据和最新题目
+        const [statsResult, questionsResult] = await Promise.allSettled([
+          store.dispatch('statistics/getSystemStatistics'),
+          store.dispatch('question/getRawQuestions', {
+            page: 1,
+            size: 10
+          })
+        ])
+        
+        // 处理题目数据
+        if (questionsResult.status === 'fulfilled') {
+          recentQuestions.value = questionsResult.value.data?.questions || []
+        }
+        
+        // 如果统计数据失败，仍然继续显示页面
+        if (statsResult.status === 'rejected') {
+          console.warn('统计数据加载失败，使用默认数据')
+        }
+        
       } catch (error) {
         console.error('加载仪表板数据失败:', error)
+        ElMessage.error('仪表板数据加载失败，请刷新页面重试')
       } finally {
         loading.value = false
       }
