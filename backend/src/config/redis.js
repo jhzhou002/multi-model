@@ -17,7 +17,8 @@ const client = redis.createClient({
   socket: {
     host: redisConfig.host,
     port: redisConfig.port,
-    family: redisConfig.family
+    family: redisConfig.family,
+    reconnectStrategy: false // 禁用重连，避免日志噪音
   },
   password: redisConfig.password,
   database: redisConfig.db
@@ -25,7 +26,10 @@ const client = redis.createClient({
 
 // 错误处理
 client.on('error', (err) => {
-  console.error('Redis 客户端错误:', err);
+  // 静默处理Redis错误，避免日志噪音
+  if (err.code !== 'ECONNREFUSED') {
+    console.error('Redis 客户端错误:', err);
+  }
 });
 
 client.on('connect', () => {

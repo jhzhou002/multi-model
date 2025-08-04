@@ -164,6 +164,8 @@ class QuestionController {
   // 获取原始题目列表
   static async getRawQuestions(req, res, next) {
     try {
+      console.log('📥 收到原始题目列表请求，查询参数:', req.query);
+      
       const {
         status,
         type,
@@ -173,19 +175,30 @@ class QuestionController {
         size = 50
       } = req.query;
 
-      // 参数验证
-      const pageNum = Math.max(1, parseInt(page));
-      const pageSize = Math.min(200, Math.max(10, parseInt(size)));
+      // 参数验证和转换
+      const pageNum = Math.max(1, parseInt(page) || 1);
+      const pageSize = Math.min(200, Math.max(10, parseInt(size) || 50));
       const offset = (pageNum - 1) * pageSize;
 
+      console.log('📊 分页参数处理结果:', { pageNum, pageSize, offset });
+
       const filters = {
-        status,
-        type,
-        knowledgePoint,
+        status: status || undefined,
+        type: type || undefined,
+        knowledgePoint: knowledgePoint || undefined,
         difficulty: difficulty ? parseInt(difficulty) : undefined,
         limit: pageSize,
         offset
       };
+      
+      // 清理undefined值
+      Object.keys(filters).forEach(key => {
+        if (filters[key] === undefined) {
+          delete filters[key];
+        }
+      });
+
+      console.log('🔍 最终筛选参数:', filters);
 
       // 获取题目列表和总数
       const [questions, total] = await Promise.all([
@@ -193,17 +206,11 @@ class QuestionController {
         Question.getRawQuestionsCount(filters)
       ]);
 
-      // 处理返回数据，解析JSON字段
+      // 处理返回数据，JSON字段已由MySQL自动解析
       const processedQuestions = questions.map(question => ({
         ...question,
-        deepseek_raw: typeof question.deepseek_raw === 'string' 
-          ? JSON.parse(question.deepseek_raw) 
-          : question.deepseek_raw,
-        kimi_check: question.kimi_check 
-          ? (typeof question.kimi_check === 'string' 
-              ? JSON.parse(question.kimi_check) 
-              : question.kimi_check)
-          : null
+        deepseek_raw: question.deepseek_raw || null,
+        kimi_check: question.kimi_check || null
       }));
 
       res.json({
@@ -247,17 +254,11 @@ class QuestionController {
         });
       }
 
-      // 处理JSON字段
+      // 处理JSON字段 - 已由MySQL自动解析
       const processedQuestion = {
         ...question,
-        deepseek_raw: typeof question.deepseek_raw === 'string' 
-          ? JSON.parse(question.deepseek_raw) 
-          : question.deepseek_raw,
-        kimi_check: question.kimi_check 
-          ? (typeof question.kimi_check === 'string' 
-              ? JSON.parse(question.kimi_check) 
-              : question.kimi_check)
-          : null
+        deepseek_raw: question.deepseek_raw || null,
+        kimi_check: question.kimi_check || null
       };
 
       res.json({
@@ -421,14 +422,10 @@ class QuestionController {
 
       const questions = await Question.getQuestions(filters);
 
-      // 处理JSON字段
+      // 处理JSON字段 - 已由MySQL自动解析
       const processedQuestions = questions.map(question => ({
         ...question,
-        options: question.options 
-          ? (typeof question.options === 'string' 
-              ? JSON.parse(question.options) 
-              : question.options)
-          : null
+        options: question.options || null
       }));
 
       res.json({
@@ -511,36 +508,22 @@ class QuestionController {
 
       // 如果有生成内容，提供预览
       if (question.deepseek_raw) {
-        try {
-          const deepseekData = typeof question.deepseek_raw === 'string' 
-            ? JSON.parse(question.deepseek_raw) 
-            : question.deepseek_raw;
-          
-          processedQuestion.preview = {
-            question: deepseekData.question ? deepseekData.question.substring(0, 200) + '...' : '',
-            answer: deepseekData.answer || '',
-            hasOptions: !!deepseekData.options
-          };
-        } catch (e) {
-          console.error('解析题目内容失败:', e);
-        }
+        const deepseekData = question.deepseek_raw;
+        processedQuestion.preview = {
+          question: deepseekData.question ? deepseekData.question.substring(0, 200) + '...' : '',
+          answer: deepseekData.answer || '',
+          hasOptions: !!deepseekData.options
+        };
       }
 
       // 如果有审核结果，添加审核信息
       if (question.kimi_check) {
-        try {
-          const kimiData = typeof question.kimi_check === 'string' 
-            ? JSON.parse(question.kimi_check) 
-            : question.kimi_check;
-          
-          processedQuestion.review = {
-            passed: kimiData.passed,
-            score: kimiData.overall_score,
-            issues: kimiData.issues || []
-          };
-        } catch (e) {
-          console.error('解析审核结果失败:', e);
-        }
+        const kimiData = question.kimi_check;
+        processedQuestion.review = {
+          passed: kimiData.passed,
+          score: kimiData.overall_score,
+          issues: kimiData.issues || []
+        };
       }
 
       res.json({
